@@ -1,0 +1,248 @@
+<tool id="coverage2cytosine" name="Coverage2Cytosine" version="0.14.3">
+    <!-- -->
+    <description>Cytosine methylation report from bismark2bedGraph methylation input file</description>
+    <!-- -->
+    <requirements>
+    </requirements>
+    <stdio>
+        <exit_code range="1:" />
+        <exit_code range=":-1" />
+        <regex match="Error:" />
+        <regex match="Exception:" />
+    </stdio>
+    <command interpreter="python">
+<![CDATA[
+    c2cpy.py
+    ## Configure bismark_genome_preparation for c2c, bismark_wrapper2.py, and bismark_bowtie2_wrapper.xml
+
+    --bismark_path $/home/galaxy/tools/bismark
+
+    --input_file "${input_file}"
+
+    ##
+    ## Option parameters
+    ##
+
+    #if $params.settingsType == "custom":
+
+        ##default off
+        $params.CX_context
+        $params.zero_based
+
+        ## Figure output collection and zipping for the split_by_chromosome option.
+        ## #if $params.split_by_chromosome:
+        ##    --split_by_chromosome
+        ## #end if
+
+        #if $params.merge_CpG:
+            --merge_CpG
+        #end if
+
+    #end if
+
+    ##
+    ## Bismark genome preparation if required
+    ## Borrowing idea from bismark_bowtie2_wrapper.xml
+    ##
+    
+    ## Handle reference file starting from Galaxy
+    #if $refGenomeSource.genomeSource == "history":
+        --fasta_file $refGenomeSource.fasta_file
+    #else:
+        --genome_folder ${refGenomeSource.index.fields.path} 
+    #end if
+
+    ##
+    ## Output parameters
+    ##
+
+    --output $output
+
+    #if $merged_CpG_coverage
+     --merged_CpG_coverage $merged_CpG_coverage
+    #end if
+
+    #if $chromosome_zip_archive
+     --chromosome_zip_archive $chromosome_zip_archive
+    #end if
+]]>
+    </command>
+    <inputs>
+        <!-- Input parameters -->
+        <param name="input_file" type="data" format="cov" label="Coverage file from bismark2bedGraph" />
+        <!-- -->
+        <conditional name="refGenomeSource">
+          <param name="genomeSource" type="select" label="Select your reference genome from history or use a built-in index." help="Built-in indexes made using default options">
+            <option value="indexed">Use a built-in index</option>
+            <option value="history">Provide your reference file in *.fasta or *.fa format</option>
+          </param>
+          <!-- Reference genome from index -->
+          <when value="indexed">
+            <param name="index" type="select" label="Select the reference genome" help="If your genome of interest is not listed, contact your Galaxy admin">
+              <options from_data_table="bowtie2_indexes">
+                <filter type="sort_by" column="2"/>
+                <validator type="no_options" message="No indexes are available for the selected input dataset"/>
+              </options>
+            </param>
+          </when>
+          <!-- Reference genome from history -->
+          <when value="history">
+            <param name="fasta_file" type="data" format="fasta" metadata_name="dbkey" label="Select the reference genome" />
+          </when>
+        </conditional>
+        <conditional name="params">
+            <param name="settingsType" type="select" label="coverage2cytosine settings to use" help="Coverage2cytosine options">
+                <option value="default">Use Defaults</option>
+                <option value="custom">Full option list</option>
+            </param>
+            <when value="default" />
+            <when value="custom">
+                <!-- CX  -->
+                <param name="CX_context" type="boolean" truevalue="--CX_context" falsevalue="" checked="false" label="Enable to include information on every cytosine in the genome, irrespective of the context" help="WARNING: Output files with more than 1.1 billion lines may be generated if using whole mammalian genomes."/>
+                <!-- zero_based -->
+                <param name="zero_based" type="boolean" truevalue="--zero_based" falsevalue="" checked="false" label="Use 0-based coordinates instead of 1-based coordinates throughout."/>
+                <!-- split_by_chromosome -->
+                <param name="split_by_chromosome" type="boolean" truevalue="true" falsevalue="false" checked="false" label="Divide cytosine report by chromosome" help="All chromosome-separated outputs are collected as a zip archive."/>
+                <!-- output Option: merge_CpG-->
+                <param name="merge_CpG" type="boolean" truevalue="true" falsevalue="false" checked="false" label="Offer an additional coverage file pooling top and bottom strand metyhlation into a single CpG nucleotide entity." help="WARNING: Cannot be used in conjunction with options CX-context and split-by-chromosome."/>
+            </when>
+        </conditional>
+    </inputs>
+
+
+    <outputs>
+        <!-- tabular or text report file-->
+        <data format="text,txt,tabular,tab" name="output" label="${tool.name} on ${on_string}: Cytosine methylation report">
+          <actions>        
+            <conditional name="refGenomeSource.genomeSource">
+              <when value="indexed">
+                <action type="metadata" name="dbkey">
+                  <option type="from_data_table" name="bowtie2_indexes" column="1" offset="0">
+                    <filter type="param_value" column="0" value="#" compare="startswith" keep="False"/>
+                    <filter type="param_value" ref="refGenomeSource.index" column="0"/>
+                  </option>
+                </action>
+              </when>
+              <when value="history">
+                <action type="metadata" name="dbkey">
+                  <option type="from_param" name="refGenomeSource.fasta_file" param_attribute="dbkey"/>
+                </action>
+              </when>
+            </conditional>
+          </actions>
+        </data>
+
+        <data format="cov" name="merged_CpG_coverage" label="${tool.name} on ${on_string}: Merged CpG coverage">
+            <filter>(params['settingsType'] == "custom" and params['merge_CpG'] is True)</filter>
+        </data>
+
+        <data format="zip" name="chromosome_zip_archive" label="${tool.name} on ${on_string}: Cytosine methylation reports by chromosome">
+            <filter>(params['settingsType'] == "custom" and params['split_by_chromosome'] is True)</filter>
+        </data>
+    </outputs>
+    
+    <help>
+<![CDATA[
+**What it does**
+
+Coverage2cytosine_ is a script of the Bismark package to create cytosine methylation reports for
+a genome of interest and a sorted methylation input file produced by the script "bismark2bedGraph".
+
+.. _Coverage2cytosine: http://www.bioinformatics.babraham.ac.uk/projects/bismark/
+
+Command line usage: coverage2cytosine [options] --genome_folder <path_to_genome> -o <output filename> [input]
+
+Bismark is developed by Krueger F and Andrews SR. at the Babraham Institute. Krueger F, Andrews SR. (2011-2015) Bismark: a flexible aligner for bisulfite sequencing
+
+------
+
+**Input format**
+
+The input file needs to have been generated with the script bismark2bedGraph (the file ends with a '.cov' extension) or otherwise be sorted by position and exactly in the following format:
+
+<chromosome>  <start position>  <end position>  <methylation percentage>  <count methylated>  <count unmethylated>
+
+The coordinates of the input file are expected to be 1-based throughout (do not use files ending in .zero.cov!).
+
+------
+
+**Note on usage**
+
+.. class:: warningmark
+
+Please take into consideration the size of your datasets and your Bismark genome reference as it may take a while to process,
+and the output file(s) may be large.
+
+Be wary of the processing time needed for the '-CX/--CX_context', as the output files will be large (dependent on genome reference size).
+
+One may have to create or edit the .loc file for coverage2cytosine in order for your genome to appear in Galaxy. The current .loc file
+is the same one used for the bisulfite mapper (technically should work given the experiment).
+
+The '--merge_CpG' option is currently experimental and only works for CpG context and only if a single genome-wide report is specifed.
+
+------
+
+**Output**
+
+By default, the output uses 1-based chromosome coordinates and reports CpG positions only
+(for both strands individually and not merged in any way).
+
+The output file is in the following format (tab-delimited)::
+
+    Column  Description
+    ------  ---------------------------------------
+      1     Chromosome
+      2     Position
+      3     Strand
+      4     Count methylated
+      5     Count nonmethylated
+      6     C-context
+      7     Trinucleotide context
+
+    * Coordinates may be changed to 0-based using the option '--zero_based'.
+    * Individual files by chromosome can be generated instead using the option '--split_by_chromosome'
+    * An additional coverage file can be generated using the option '--merge_CpG' (see above for the coverage file format)
+
+------
+
+**OPTIONS**
+
+Input::
+
+  -o/--output <filename>   Name of the output file, mandatory
+
+  --dir                    Output directory. Output is written to the current direcotry if not specified explicitly.
+
+  --genome_folder, <path>  Enter the genome folder you wish to use to extract sequences from (full path only). Accepted
+                           formats are FastA files ending with '.fa' or '.fasta'. Specifying a genome folder path is mandatory.
+
+  -CX/--CX_context         The output file contains information on every single cytosine in the genome irrespective of
+                           its context. This applies to both forward and reverse strands. Please be aware that this will
+                           will generate output files with > 1.1 billion lines for a mammalian genome such as human or mouse.
+                           Default: OFF (i.e. Default = CpG context only)
+
+  --merge_CpG              Using this option will post-process the genome-wide report to write out an additional coverage
+                           file (see above for the coverage file format) which has the top and bottom strand methylation
+                           evidence pooled into a single CpG dinucleotide entity. This may be the desirable input format
+                           for some downstream processing tools such as the R-package bsseq (by K.D. Hansen). An example would be:
+
+                             genome-wide CpG report (old)
+                             gi|9626372|ref|NC_001422.1|     157     +       313     156     CG
+                             gi|9626372|ref|NC_001422.1|     158     -       335     156     CG
+                             merged CpG evidence coverage file (new)
+                             gi|9626372|ref|NC_001422.1|     158     158     67.500000       648     312
+
+                           This option is currently experimental, and only works if CpG context only and a single genome-wide report
+                           were specified (i.e. it doesn't work with the options --CX or --split_by_chromosome).
+
+  --zero_based             Uses 0-based coordinates instead of 1-based coordinates throughout. Default: OFF.
+
+  --split_by_chromosome    Writes the output into individual files for each chromosome instead of a single output file. Files
+                           will be named to include the input filename and the chromosome number.
+
+]]>
+    </help>
+  <citations>
+     <citation type="doi">10.1093/bioinformatics/btr167</citation>
+  </citations>
+</tool>

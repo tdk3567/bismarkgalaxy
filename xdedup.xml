@@ -1,0 +1,221 @@
+<tool id="deduplicate_bismark" name="DeduplicateBismark" version="0.14.3">
+  <description>Remove duplicated alignments at the same genome position from the Bismark mapping output</description>
+  <command interpreter="python">
+<![CDATA[
+        deduplicatebis.py
+        --bismark_path $/home/galaxy/tools/bismark
+        --input_file "${input_file}"
+
+        ## Option parameters
+        #if $type == "paired":
+            --paired
+        #else:
+            --single        
+        #end if
+
+        #if $params.settingsType == "custom":
+            $params.bam
+            $params.vanilla
+            $params.representative
+            $params.barcode
+        #end if
+
+        ## Output parameters
+        --report $report
+        #if $output
+            --output $output
+        #end if
+        ##if $representative_output
+        ##    --representative_output $representative_output
+        ##end if
+        ##if $barcode_output
+        ##    --barcode_output $barcode_output
+        ##end if
+        ##if $bam_output
+        ##    --bam_output $bam_output
+        ##end if
+        ##if $vanilla_output
+        ##    --vanilla_output $vanilla_output
+        ###end if
+]]>
+  </command>
+
+  <inputs>
+      <!-- input parameters -->
+      <param name="input_file" type="data" format="sam" label="Bismark mapper SAM file" />
+      <param name="type" type="select" label="Dependent on the reads given to Bismark mapper: Select if the reads were paired-end">
+         <option value="paired">Paired-end</option>
+         <option value="single">Single</option>
+      </param>
+      <!-- options -->
+      <conditional name="params">
+         <param name="settingsType" type="select" label="Deduplication settings" help="Set custom format of deduplicated Bismark file">
+             <option value="default">Default</option>
+             <option value="custom">Custom</option>
+         </param>
+         <when value="default" />
+             <!--customs-->
+         <when value="custom">
+             <!-- bam -->
+             <param name="bam" type="boolean" truevalue="--bam" falsevalue="" checked="false" label="Change output to BAM format"/>
+             <!-- vanilla -->
+             <param name="vanilla" type="boolean" truevalue="--vanilla" falsevalue="" checked="false" label="Depreciated but included: Input file is former custom Bismark text format (not SAM)"/>
+             <!-- representative -->
+             <param name="representative" type="boolean" truevalue="--representative" falsevalue="" checked="false" label="Most frequent methylation call among all sequences for any given position." help="Very likely to be the most highly amplified PCR product for a given sequence"/>
+             <!-- barcode -->
+             <param name="barcode" type="boolean" truevalue="--barcode" falsevalue="" checked="false" label="Barcode consideration (last element at the end of read ID separated by the colon symbol,':'.)"/>
+         </when>
+      </conditional>
+  </inputs>
+
+ <outputs>
+      <!-- report -->
+      <data format="txt" name="report" label="${tool.name} on ${on_string}: Deduplication Report"/>
+
+      <!-- output -->
+      <data format="sam" name="output" label="${tool.name} on ${on_string}: Deduplicated SAM file">
+          <filter>( params['settingsType'] == 'default' ) or 
+                  (( params['settingsType'] == 'custom' and 
+                    params['bam'] is False and 
+                    params['vanilla'] is False and 
+                    params['representative'] is False and 
+                    params['barcode'] is False )) 
+          </filter>
+          <change_format>
+            <when input="settingsType" value="bam" format="bam"/>
+            <when input="settingsType" value="vanilla" format="txt"/>
+            <when input="settingsType" value="representative" format="sam" />
+            <when input="settingsType" value="barcode" format="sam" /> 
+          </change_format>
+      </data>
+
+      <!-- bam output -->
+      <!-- 
+      <data format="bam" name="bam_output" label="${tool.name} on ${on_string}: Deduplicated BAM" >
+          <filter>(( params['settingsType'] is 'custom' and
+                  params['bam'] is True))</filter>
+          <change_format>
+            <when input="custom"  value="bam" format="bam"/>
+          <change_format>
+      </data> 
+      -->
+      <!-- vanilla output-->
+      <!-- 
+      <data format="txt" name="vanilla_output" label="${tool.name} on ${on_string}: Deduplicated Bismark vanilla output" >
+          <filter>params['vanilla'] is True</filter>
+      </data>
+      -->
+
+      <!-- representative output -->
+      <!-- 
+      <data format="sam" name="representative_output" label="${tool.name} on ${on_string}: Deduplicated SAM by methylation call" >
+          <filter>params['representative'] is True</filter>
+      </data>
+      <data format="txt" name="representative_output" label="${tool.name} on ${on_string}:Deduplicated Paired-End Bismark file by methylation call">
+          <filter>params['representative'] is True and 
+                  params['vanilla'] is True
+          </filter>
+      </data>
+      <data format="bam" name="representative_output" label="${tool.name} on ${on_string}: Deduplicated BAM by methylation call">
+          <filter>params['representative'] is True and 
+                  params['bam'] is True and 
+          </filter>
+      </data>
+      -->
+
+      <!-- barcode output -->
+      <!-- 
+      <data format="sam" name="barcode_output" label="${tool.name} on ${on_string}: Deduplicated SAM/BAM by sequence ID barcode" >
+          <filter>params['barcode'] is True</filter>
+      </data>
+      <data format="txt" name="barcode_output" label="${tool.name} on ${on_string}: Deduplicated SAM by sequence ID barcode">
+          <filter>params['barcode'] is True and 
+                  params['vanilla'] is True
+          </filter>
+      </data>
+      <data format="bam" name="barcode_output" label="${tool.name} ${on_string}: Deduplicated BAM by sequence ID barcode">
+          <filter>params['barcode'] is True and 
+                  params['bam'] is True)
+          </filter>
+      </data>
+      -->
+
+ </outputs>
+
+  <tests>
+  </tests>
+
+  <help>
+<![CDATA[
+**What it does**
+
+DeduplicateBismark_ is supposed to remove alignments to the same position of the genome from the Bismark mapping output (both single and paired SAM files), which can arise by e.g. excessive PCR amplification. If sequences align to the same genomic position but on different strands, they will be scored individually.
+
+.. _DeduplicateBismark: http://www.bioinformatics.babraham.ac.uk/projects/bismark
+
+Command line usage: deduplicate_bismark [options] [filename(s)]
+
+Bismark is developed by Kruegers F and Andrews SR at the Babraham Institute. Krueger F, Andrews SR. (2011-2015) Bismark: a flexible aligner for bisulfite-sequencing
+
+------
+
+**Input format**
+
+The expected Deduplicate Bismark input format is SAM format (Bismark v0.6x or higher). 
+For deduplication of the depreciated old custom Bismark output, please specify '--vanilla'.
+
+------
+
+**Notes on deduplication**
+
+.. class:: warningmark
+
+Deduplication is not recommended on RRBS-type experiments!
+
+In the default mode, the first alignment to a given position will be used irrespective of its methylation call (this is the fastest option, and as the alignments are not ordered in any way this is also near enough random).
+
+For single-end alignments, only use of the start coordinate of a read will be used for deduplication.
+For paired-end alignments, the start coordinate of the first read and the end coordinate of the second read will be used for deduplication.
+
+------
+
+Output:
+
+Deduplicate Bismark reproduces the given SAM file without duplications of alignment at the same genome position.
+
+------
+
+**OPTIONS**
+
+Input::
+
+  -s/--single                deduplicate single-end Bismark files (default format: SAM)
+  -p/--paired                deduplicate paired-end Bismark files (default format: SAM)
+
+  --vanilla                  The input file is in the old custom Bismark format (before v0.6x) and not in SAM format.
+
+  --representative           The script will browse through all sequences and print out the sequence with the most representative
+                             (as in the most frequent) methylation call for any given position. Note that this is very likely
+                             the most highly amplified PCR product for a given sequence.
+
+  --barcode                  In addition to chromosome, start position and orientation this will also take a potential barcode into
+                             consideration while deduplicating. The barcode needs to be the last element of the read ID and separated
+                             by a ':', e.g.: MISEQ:14:000000000-A550:1:1101:18024:2058_1:N:0:CTCCT .
+
+  --bam                      The output will be written out in BAM format instead of the SAM format. This script will attempt to
+                             use the path the samtools that was specifed in '--samtools_path', or, if it hasn't been specified,
+                             attempt to find samtools in the PATH. If no installation of samtools can be found, the SAM output will
+                             be compressed with GZIP instead (yielding a .sam.gz output file).
+
+  --samtools_path            The path to your Samtools installation, e.g. /home/user/samtools/. Does not need to be specified explicitly
+                             if Samtools is in the PATH already.
+
+  --version                  Print version information and exit.
+
+
+]]> 
+  </help>
+  <citations>
+      <citation type="doi">10.1093/bioinformatics/btr167</citation>
+  </citations>
+</tool>
